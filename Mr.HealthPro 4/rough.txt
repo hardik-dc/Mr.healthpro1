@@ -1,0 +1,55 @@
+from flask import Flask, render_template, request
+from mr_healthpro import MrHealthPro
+import pandas as pd
+from researches import get_disease_info 
+from recom import get_user_location, recommend_hospitals
+
+app = Flask(__name__)
+mr_health_pro = MrHealthPro()
+hospital_data = pd.read_csv('delhi_hospitals.csv')
+
+@app.route('/')
+def index():
+    return render_template('index.html')
+
+@app.route('/diagnosis', methods=['GET', 'POST'])
+def diagnosis():
+    predictions = []
+    if request.method == 'POST':
+        symptoms = request.form['symptoms']
+        predictions = mr_health_pro.predict(symptoms)
+    return render_template('diagnosis.html', predictions=predictions)
+
+@app.route('/research', methods=['GET', 'POST'])
+def research():
+    disease_info = {}
+    if request.method == 'POST':
+        disease_name = request.form['disease']
+        summary, content = get_disease_info(disease_name)
+        disease_info = {'name': disease_name, 'summary': summary, 'content': content}
+    return render_template('research.html', disease_info=disease_info)
+
+@app.route('/appointment', methods=['GET', 'POST'])
+def appointment():
+    if request.method == 'POST':
+        city = request.form['city']
+        district = request.form['district']
+        address = f"{city}, {district}"
+        user_location = get_user_location(address)
+        
+        if user_location:
+            recommendations = recommend_hospitals((user_location.latitude, user_location.longitude), hospital_data)
+            return render_template('appointment.html', recommendations=recommendations, user_location=user_location)
+        else:
+            error_message = f"Unable to find location for {address}. Please try again."
+            return render_template('appointment.html', error_message=error_message)
+    
+    # If method is GET, render the form
+    return render_template('appointment.html')
+
+@app.route('/contact')
+def contact():
+    return render_template('contact.html')
+
+if __name__ == '__main__':
+    app.run(debug=True)
